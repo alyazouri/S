@@ -5,10 +5,10 @@
 
 // ================= 1. PROXIES & FAILOVER CONFIGURATION =================
 // دعم ميكانيكية الطوارئ (; DIRECT) لمنع انقطاع الاتصال نهائياً في حال تذبذب البروكسي
-var MATCH_JO = "PROXY 46.185.131.218:20005; DIRECT";
+var MATCH_JO = "PROXY 212.35.66.45:20005; DIRECT";
 var LOBBY_POOL = [
-  "PROXY 46.185.131.218:80; DIRECT",
-  "PROXY 46.185.131.218:443; DIRECT"
+  "PROXY 212.35.66.45:80; DIRECT",
+  "PROXY 212.35.66.45:443; DIRECT"
 ];
 var BLOCK  = "PROXY 127.0.0.1:9";
 var DIRECT = "DIRECT";
