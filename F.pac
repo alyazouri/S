@@ -1,151 +1,110 @@
 // ============================================================================
-// ⭐ VIP PURE JORDAN ESPORTS PAC SCRIPT — IPV4 ONLY EDITION ⭐
-// [ 0% IPV6 | 100% JORDAN ROUTING | LOW LATENCY PRIORITY ]
+// ⭐ MIDDLE EAST LOCKED PAC — JORDAN OPTIMIZED ESPORTS ROUTING ⭐
+// [ NO EU ROUTES | NO ASIA ROUTES | HIGH ARAB PLAYER POOL PRIORITY ]
 // ============================================================================
 
-// ================= PROXIES =================
 var MATCH_JO = "PROXY 212.35.66.45:20005; DIRECT";
-var LOBBY_POOL = [
-  "PROXY 212.35.66.45:80; DIRECT",
-  "PROXY 212.35.66.45:443; DIRECT"
-];
-var BLOCK  = "PROXY 127.0.0.1:9";
+var LOBBY = "PROXY 212.35.66.45:443; DIRECT";
 var DIRECT = "DIRECT";
+var BLOCK = "PROXY 127.0.0.1:9";
 
-// ================= PURE JORDAN IPV4 NETWORKS =================
-var JORDAN_MATCH_IPV4 = [
-  ["46.185.128.0",  "255.255.128.0"],   // Orange Fiber Core
-  ["92.253.0.0",    "255.255.128.0"],   // Residential FTTH
-  ["94.249.0.0",    "255.255.128.0"],   // Home Broadband
-  ["176.29.0.0",    "255.255.0.0"],     // Zain Core
-  ["46.18.0.0",     "255.255.128.0"],   // Zain Fiber/FWA
-  ["178.20.128.0",  "255.255.128.0"],   // Zain Residential
-  ["5.21.0.0",      "255.255.128.0"],   // Orange/JTG mix
-  ["31.9.0.0",      "255.255.0.0"],     // Umniah Core
-  ["82.212.0.0",    "255.255.0.0"],     // Umniah Broadband
-  ["62.135.0.0",    "255.255.0.0"]      // Telecom Backbone
+// ================= JORDAN + ME REGION CORE NETWORKS =================
+var ME_CORE_IPV4 = [
+  ["5.21.0.0",      "255.255.128.0"],   // Orange Jordan
+  ["31.9.0.0",      "255.255.0.0"],     // Umniah
+  ["37.202.64.0",   "255.255.192.0"],   // JTG / Orange FTTH
+  ["46.18.0.0",     "255.255.128.0"],   // Zain
+  ["46.185.128.0",  "255.255.128.0"],   // Orange Fiber
+  ["62.135.0.0",    "255.255.0.0"],     // Telecom backbone
+  ["82.212.0.0",    "255.255.0.0"],     // Umniah
+  ["94.249.128.0",  "255.255.128.0"],   // Residential ME pool
+  ["176.29.0.0",    "255.255.0.0"],     // Zain core
+  ["178.20.128.0",  "255.255.128.0"],   // Zain residential
+  ["188.247.0.0",   "255.255.0.0"]      // Orange backbone
 ];
 
-// ================= GEO BLACKLIST =================
-var GEO_BLACKLIST = [
-  ["5.0.0.0", "255.0.0.0"], ["31.128.0.0", "255.192.0.0"],
-  ["50.0.0.0", "255.0.0.0"], ["51.0.0.0", "255.0.0.0"],
-  ["52.0.0.0", "255.0.0.0"], ["104.0.0.0", "255.0.0.0"],
-  ["178.64.0.0", "255.192.0.0"], ["185.0.0.0", "255.0.0.0"]
+// ================= STRICT NON-ME BLOCKLIST =================
+var BLOCK_REGIONS = [
+  ["5.0.0.0", "255.0.0.0"],     // EU partial / misc
+  ["31.128.0.0", "255.192.0.0"],
+  ["50.0.0.0", "255.0.0.0"],
+  ["51.0.0.0", "255.0.0.0"],
+  ["52.0.0.0", "255.0.0.0"],     // AWS EU/US
+  ["104.0.0.0", "255.0.0.0"],    // Cloudflare US
+  ["129.0.0.0", "255.0.0.0"],    // EU mixed
+  ["149.0.0.0", "255.0.0.0"],
+  ["151.0.0.0", "255.0.0.0"],
+  ["185.0.0.0", "255.0.0.0"],    // Europe hosting
+  ["188.0.0.0", "255.0.0.0"]
 ];
 
-// ================= SESSION CACHE =================
-var SESSION = {
-  dnsCache: {},
-  routeCache: {},
-  cacheSize: 0,
-  matchNet: null,
-  matchTime: 0
-};
+// ================= MATCH / GAME DETECTION =================
+var REGEX_GAME = /pubg|tencent|krafton|proximabeta|match|game|battle|room|arena|tdm|esports/i;
+var REGEX_LIVE = /lobby|matchmaking|queue|join|server|play/i;
+var REGEX_SOCIAL = /voice|chat|friend|clan|team/i;
+var REGEX_CDN = /cdn|asset|update|patch|map/i;
 
 // ================= HELPERS =================
 function norm(h){
   var i = h.indexOf(":");
-  return i > -1 ? h.substring(0, i) : h;
-}
-
-function isIPv6(ip){
-  return false; // 🚫 IPv6 COMPLETELY DISABLED
+  return i > -1 ? h.substring(0,i) : h;
 }
 
 function isInList(ip, list){
-  for (var i = 0; i < list.length; i++) {
+  for (var i=0;i<list.length;i++){
     if (isInNet(ip, list[i][0], list[i][1])) return true;
   }
   return false;
 }
 
-// ================= DNS =================
-function resolvePinned(host){
-  var now = Date.now();
-  if (SESSION.dnsCache[host] && (now - SESSION.dnsCache[host].time < 300000)) {
-    return SESSION.dnsCache[host].ip;
-  }
-
-  var ip = null;
+function resolve(host){
   try {
-    var raw = dnsResolve(host);
-    if (raw) ip = raw.split(';')[0];
-  } catch(e){}
-
-  if (ip) SESSION.dnsCache[host] = { ip: ip, time: now };
-  return ip;
-}
-
-// ================= ROUTING =================
-function pickLobbyProxy(host){
-  var h = 0;
-  for (var i = 0; i < host.length; i++) {
-    h = (h + host.charCodeAt(i)) % LOBBY_POOL.length;
+    return dnsResolve(host);
+  } catch(e){
+    return null;
   }
-  return LOBBY_POOL[h];
 }
 
-// ================= REGEX =================
-var REGEX_MATCH = /match|game|room|battle|arena|tdm|esports|server|play/i;
-var REGEX_LOBBY = /lobby|matchmaking|queue|join|hub/i;
-var REGEX_SOCIAL = /voice|chat|friend|clan|team/i;
-var REGEX_STORE = /shop|store|uc|event|reward/i;
-var REGEX_CDN = /cdn|asset|update|patch|map/i;
-var REGEX_PUBG = /pubg|tencent|krafton|proximabeta|gcloud/i;
-
-function isPUBG(h){ return REGEX_PUBG.test(h); }
-function isMatch(u,h){ return REGEX_MATCH.test(u+h); }
-function isLobby(u,h){ return REGEX_LOBBY.test(u+h); }
-function isSocial(u,h){ return REGEX_SOCIAL.test(u+h); }
-function isStore(u,h){ return REGEX_STORE.test(u+h); }
-function isCDN(u,h){ return REGEX_CDN.test(u+h); }
+function pickProxy(host){
+  return (host.length % 2 === 0) ? MATCH_JO : LOBBY;
+}
 
 // ================= MAIN =================
 function FindProxyForURL(url, host) {
 
   host = norm(host.toLowerCase());
 
-  if (SESSION.routeCache[host]) {
-    return SESSION.routeCache[host];
-  }
-
-  if (isPlainHostName(host) || host.indexOf("127.0.0.1") === 0 ||
-      host.indexOf("192.168.") === 0 || host.indexOf("10.") === 0) {
+  if (isPlainHostName(host) ||
+      host.indexOf("127.0.0.1") === 0 ||
+      host.indexOf("192.168.") === 0 ||
+      host.indexOf("10.") === 0) {
     return DIRECT;
   }
 
-  if (!isPUBG(host)) return DIRECT;
+  if (!REGEX_GAME.test(host)) {
+    return DIRECT;
+  }
 
-  var ip = resolvePinned(host);
+  var ip = resolve(host);
   if (!ip) return BLOCK;
 
-  if (isInList(ip, GEO_BLACKLIST)) {
+  // 🚫 BLOCK ALL NON MIDDLE EAST ROUTES
+  if (isInList(ip, BLOCK_REGIONS)) {
     return BLOCK;
   }
 
-  var proxy = pickLobbyProxy(host);
-
-  if (isMatch(url, host)) {
-    if (!isInList(ip, JORDAN_MATCH_IPV4)) return BLOCK;
-
-    var net = ip.split('.').slice(0,3).join('.');
-    if (!SESSION.matchNet || Date.now() - SESSION.matchTime > 2700000) {
-      SESSION.matchNet = net;
-      SESSION.matchTime = Date.now();
-      return MATCH_JO;
+  // 🎯 FORCE MIDDLE EAST MATCH POOL
+  if (REGEX_GAME.test(host)) {
+    if (!isInList(ip, ME_CORE_IPV4)) {
+      return BLOCK; // يمنع EU / Asia routing
     }
-
-    if (net !== SESSION.matchNet) return BLOCK;
     return MATCH_JO;
   }
 
-  if (isLobby(url, host) || isSocial(url, host) ||
-      isStore(url, host) || isCDN(url, host)) {
-    SESSION.routeCache[host] = proxy;
-    return proxy;
+  // 🎮 lobby / social / cdn
+  if (REGEX_LIVE.test(host) || REGEX_SOCIAL.test(host) || REGEX_CDN.test(host)) {
+    return LOBBY;
   }
 
-  SESSION.routeCache[host] = proxy;
-  return proxy;
+  return MATCH_JO;
 }
