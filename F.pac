@@ -1,110 +1,181 @@
-// ============================================================================
-// ⭐ MIDDLE EAST LOCKED PAC — JORDAN OPTIMIZED ESPORTS ROUTING ⭐
-// [ NO EU ROUTES | NO ASIA ROUTES | HIGH ARAB PLAYER POOL PRIORITY ]
-// ============================================================================
-
-var MATCH_JO = "PROXY 212.35.66.45:20005; DIRECT";
-var LOBBY = "PROXY 212.35.66.45:443; DIRECT";
-var DIRECT = "DIRECT";
-var BLOCK = "PROXY 127.0.0.1:9";
-
-// ================= JORDAN + ME REGION CORE NETWORKS =================
-var ME_CORE_IPV4 = [
-  ["5.21.0.0",      "255.255.128.0"],   // Orange Jordan
-  ["31.9.0.0",      "255.255.0.0"],     // Umniah
-  ["37.202.64.0",   "255.255.192.0"],   // JTG / Orange FTTH
-  ["46.18.0.0",     "255.255.128.0"],   // Zain
-  ["46.185.128.0",  "255.255.128.0"],   // Orange Fiber
-  ["62.135.0.0",    "255.255.0.0"],     // Telecom backbone
-  ["82.212.0.0",    "255.255.0.0"],     // Umniah
-  ["94.249.128.0",  "255.255.128.0"],   // Residential ME pool
-  ["176.29.0.0",    "255.255.0.0"],     // Zain core
-  ["178.20.128.0",  "255.255.128.0"],   // Zain residential
-  ["188.247.0.0",   "255.255.0.0"]      // Orange backbone
-];
-
-// ================= STRICT NON-ME BLOCKLIST =================
-var BLOCK_REGIONS = [
-  ["5.0.0.0", "255.0.0.0"],     // EU partial / misc
-  ["31.128.0.0", "255.192.0.0"],
-  ["50.0.0.0", "255.0.0.0"],
-  ["51.0.0.0", "255.0.0.0"],
-  ["52.0.0.0", "255.0.0.0"],     // AWS EU/US
-  ["104.0.0.0", "255.0.0.0"],    // Cloudflare US
-  ["129.0.0.0", "255.0.0.0"],    // EU mixed
-  ["149.0.0.0", "255.0.0.0"],
-  ["151.0.0.0", "255.0.0.0"],
-  ["185.0.0.0", "255.0.0.0"],    // Europe hosting
-  ["188.0.0.0", "255.0.0.0"]
-];
-
-// ================= MATCH / GAME DETECTION =================
-var REGEX_GAME = /pubg|tencent|krafton|proximabeta|match|game|battle|room|arena|tdm|esports/i;
-var REGEX_LIVE = /lobby|matchmaking|queue|join|server|play/i;
-var REGEX_SOCIAL = /voice|chat|friend|clan|team/i;
-var REGEX_CDN = /cdn|asset|update|patch|map/i;
-
-// ================= HELPERS =================
-function norm(h){
-  var i = h.indexOf(":");
-  return i > -1 ? h.substring(0,i) : h;
-}
-
-function isInList(ip, list){
-  for (var i=0;i<list.length;i++){
-    if (isInNet(ip, list[i][0], list[i][1])) return true;
-  }
-  return false;
-}
-
-function resolve(host){
-  try {
-    return dnsResolve(host);
-  } catch(e){
-    return null;
-  }
-}
-
-function pickProxy(host){
-  return (host.length % 2 === 0) ? MATCH_JO : LOBBY;
-}
-
-// ================= MAIN =================
 function FindProxyForURL(url, host) {
+  var PROXY_HOST = "212.35.66.45";
 
-  host = norm(host.toLowerCase());
+  var PORTS = {
+    GAME: [443, 8443, 20005],
+    SOCIAL: [10001, 10010],
+    UPDATES: [80, 443, 8443],
+    CDN: [80, 443]
+  };
 
-  if (isPlainHostName(host) ||
-      host.indexOf("127.0.0.1") === 0 ||
-      host.indexOf("192.168.") === 0 ||
-      host.indexOf("10.") === 0) {
-    return DIRECT;
-  }
+  var PORT_WEIGHTS = {
+    GAME: [6, 3, 5],
+    SOCIAL: [3, 2],
+    UPDATES: [5, 3, 2],
+    CDN: [3, 2]
+  };
 
-  if (!REGEX_GAME.test(host)) {
-    return DIRECT;
-  }
+  var BLOCK_REPLY = "PROXY 0.0.0.0:0";
+  var STICKY_SALT = "PUBG_STICKY";
+  var STICKY_TTL_MINUTES = 10;
+  var DST_RESOLVE_TTL_MS = 15000;
 
-  var ip = resolve(host);
-  if (!ip) return BLOCK;
+  var now = new Date().getTime();
+  var root = (typeof globalThis !== "undefined" ? globalThis : this);
 
-  // 🚫 BLOCK ALL NON MIDDLE EAST ROUTES
-  if (isInList(ip, BLOCK_REGIONS)) {
-    return BLOCK;
-  }
+  if (!root._PAC_CACHE) root._PAC_CACHE = {};
+  var CACHE = root._PAC_CACHE;
+  if (!CACHE.DST_RESOLVE_CACHE) CACHE.DST_RESOLVE_CACHE = {};
+  if (!CACHE._PORT_STICKY) CACHE._PORT_STICKY = {};
 
-  // 🎯 FORCE MIDDLE EAST MATCH POOL
-  if (REGEX_GAME.test(host)) {
-    if (!isInList(ip, ME_CORE_IPV4)) {
-      return BLOCK; // يمنع EU / Asia routing
+  var DOMAINS = {
+    GAME: [
+      "*.pubgmobile.com",
+      "*.pubgmobile.net",
+      "*.proximabeta.com",
+      "*.igamecj.com",
+      "*.gpubgm.com",
+      "*.qq.com",
+      "*.gcloud.qq.com",
+      "*.tencentgames.com"
+    ],
+    SOCIAL: [
+      "match.igamecj.com",
+      "match.proximabeta.com",
+      "teamfinder.igamecj.com",
+      "teamfinder.proximabeta.com",
+      "*.social.pubgmobile.com",
+      "*.clan.pubgmobile.com"
+    ],
+    UPDATES: [
+      "cdn.pubgmobile.com",
+      "updates.pubgmobile.com",
+      "patch.igamecj.com",
+      "hotfix.proximabeta.com",
+      "dlied1.qq.com",
+      "dlied2.qq.com"
+    ],
+    CDN: [
+      "cdn.igamecj.com",
+      "cdn.proximabeta.com",
+      "cdn.tencentgames.com",
+      "*.qcloudcdn.com",
+      "*.cloudfront.net",
+      "*.edgesuite.net"
+    ]
+  };
+
+  var URL_PATTERNS = {
+    GAME: [
+      "*/account/*",
+      "*/login*",
+      "*/client/version*",
+      "*/status/heartbeat*",
+      "*/presence/*",
+      "*/friends/*",
+
+      "*/matchmaking/*",
+      "*/mms/*",
+      "*/game/start*",
+      "*/game/join*",
+      "*/battle/*",
+      "*/report/battle*",
+      "*/room/*",
+      "*/customroom/*",
+      "*/session/*",
+      "*/token/*",
+      "*/server/list*",
+      "*/startgame*",
+
+      "*/arena/*",
+      "*/tdm/*",
+      "*/payload/*",
+      "*/metro/*",
+      "*/infected/*",
+      "*/miramar/*",
+      "*/erangel/*",
+      "*/livik/*",
+      "*/nusa/*",
+      "*/wow/*",
+      "*/worldofwonder/*"
+    ],
+    SOCIAL: [
+      "*/teamfinder/*",
+      "*/clan/*",
+      "*/social/*",
+      "*/search/*",
+      "*/recruit/*"
+    ],
+    UPDATES: [
+      "*/patch*",
+      "*/hotfix*",
+      "*/update*",
+      "*/download*",
+      "*/assets/*",
+      "*/assetbundle*",
+      "*/obb*"
+    ],
+    CDN: [
+      "*/cdn/*",
+      "*/static/*",
+      "*/image/*",
+      "*/media/*",
+      "*/video/*",
+      "*/res/*",
+      "*/pkg/*"
+    ]
+  };
+
+  function hostMatchesAnyDomain(h, patterns) {
+    for (var i = 0; i < patterns.length; i++) {
+      if (shExpMatch(h, patterns[i])) return true;
+      var p = patterns[i].replace(/^\*\./, ".");
+      if (h.slice(-p.length) === p) return true;
     }
-    return MATCH_JO;
+    return false;
   }
 
-  // 🎮 lobby / social / cdn
-  if (REGEX_LIVE.test(host) || REGEX_SOCIAL.test(host) || REGEX_CDN.test(host)) {
-    return LOBBY;
+  function pathMatches(u, patterns) {
+    for (var i = 0; i < patterns.length; i++) {
+      if (shExpMatch(u, patterns[i])) return true;
+    }
+    return false;
   }
 
-  return MATCH_JO;
+  function weightedPick(ports, weights) {
+    var sum = 0;
+    for (var i = 0; i < ports.length; i++) sum += (weights[i] || 1);
+    var r = Math.floor(Math.random() * sum) + 1;
+    var acc = 0;
+    for (var k = 0; k < ports.length; k++) {
+      acc += (weights[k] || 1);
+      if (r <= acc) return ports[k];
+    }
+    return ports[0];
+  }
+
+  function proxyForCategory(cat) {
+    var key = STICKY_SALT + "_PORT_" + cat;
+    var ttl = STICKY_TTL_MINUTES * 60 * 1000;
+    var e = CACHE._PORT_STICKY[key];
+    if (e && (now - e.t) < ttl) return "PROXY " + PROXY_HOST + ":" + e.p;
+
+    var p = weightedPick(PORTS[cat], PORT_WEIGHTS[cat]);
+    CACHE._PORT_STICKY[key] = { p: p, t: now };
+    return "PROXY " + PROXY_HOST + ":" + p;
+  }
+
+  for (var cat in URL_PATTERNS) {
+    if (pathMatches(url, URL_PATTERNS[cat])) {
+      return proxyForCategory(cat);
+    }
+  }
+
+  for (var c in DOMAINS) {
+    if (hostMatchesAnyDomain(host, DOMAINS[c])) {
+      return proxyForCategory(c);
+    }
+  }
+
+  return "DIRECT";
 }
